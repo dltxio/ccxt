@@ -135,8 +135,11 @@ module.exports = class latoken extends Exchange {
         return this.safeInteger (response, 'unixTimeMiliseconds');
     }
 
+    //TODO:  LOOKS LIKE ITS https://api.latoken.com/doc/v2/#tag/Market-Overview
+    //
     async fetchMarkets (params = {}) {
         const response = await this.publicGetExchangeInfoPairs (params);
+        //OLD V1 SCHEMA
         //
         //     [
         //         {
@@ -152,14 +155,26 @@ module.exports = class latoken extends Exchange {
         //         }
         //     ]
         //
+
+        //v2 https://api.latoken.com/doc/v2/#operation/getTickers LC
+        // {
+        //     "BTC_USDT": {
+        //       "base_id": "1",
+        //       "quote_id": "825",
+        //       "last_price": "10000",
+        //       "quote_volume": "20000",
+        //       "base_volume": "2"
+        //     }
+        //   }
+
         const result = [];
         for (let i = 0; i < response.length; i++) {
             const market = response[i];
             const id = this.safeString (market, 'symbol');
             // the exchange shows them inverted
-            const baseId = this.safeString (market, 'baseCurrency');
-            const quoteId = this.safeString (market, 'quotedCurrency');
-            const numericId = this.safeInteger (market, 'pairId');
+            const baseId = this.safeString (market, 'base_id');
+            const quoteId = this.safeString (market, 'quote_id');
+            const numericId = this.safeInteger (market, 'pairId'); //UNKNOWN LC
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
             const symbol = base + '/' + quote;
@@ -198,8 +213,11 @@ module.exports = class latoken extends Exchange {
         return result;
     }
 
+    //TODO:  NOW https://api.latoken.com/doc/v2/#operation/getActiveCurrencies
     async fetchCurrencies (params = {}) {
         const response = await this.publicGetExchangeInfoCurrencies (params);
+        
+        //OLD V1 SCHEMA
         //
         //     [
         //         {
@@ -212,13 +230,29 @@ module.exports = class latoken extends Exchange {
         //         }
         //     ]
         //
+
+        //NOW v2
+        // [
+        //     {
+        //       "id": "d663138b-3ec1-436c-9275-b3a161761523",
+        //       "status": "CURRENCY_STATUS_ACTIVE",
+        //       "type": "CURRENCY_TYPE_CRYPTO",
+        //       "name": "Latoken",
+        //       "tag": "LA",
+        //       "description": "LATOKEN is a cutting edge exchange which makes investing and payments easy and safe worldwide.",
+        //       "logo": "https://static.dev-mid.nekotal.tech/icons/color/la.svg",
+        //       "decimals": 9,
+        //       "created": 1571333563712
+        //     }
+        // ]
+
         const result = {};
         for (let i = 0; i < response.length; i++) {
             const currency = response[i];
-            const id = this.safeString (currency, 'symbol');
-            const numericId = this.safeInteger (currency, 'currencyId');
+            const id = this.safeString (currency, 'tag'); //was symbol
+            const numericId = this.safeInteger (currency, 'currencyId'); //id will break as its a GUID
             const code = this.safeCurrencyCode (id);
-            const precision = this.safeInteger (currency, 'precission');
+            const precision = this.safeInteger (currency, 'decimals'); //was precission
             const fee = this.safeFloat (currency, 'fee');
             const active = undefined;
             result[code] = {
@@ -274,9 +308,11 @@ module.exports = class latoken extends Exchange {
         };
     }
 
+    //TODO https://api.latoken.com/doc/v2/#operation/getBalancesByUser
     async fetchBalance (params = {}) {
         await this.loadMarkets ();
         const response = await this.privateGetAccountBalances (params);
+        //OLD V1 SCHEMA
         //
         //     [
         //         {
@@ -290,6 +326,20 @@ module.exports = class latoken extends Exchange {
         //         }
         //     ]
         //
+
+        //NEW V2 
+        // [
+        //     {
+        //       "id": "1e200836-a037-4475-825e-f202dd0b0e92",
+        //       "status": "ACCOUNT_STATUS_ACTIVE",
+        //       "type": "ACCOUNT_TYPE_WALLET",
+        //       "timestamp": 1566408522980,
+        //       "currency": "6ae140a9-8e75-4413-b157-8dd95c711b23",
+        //       "available": "898849.3300",
+        //       "blocked": "4581.9510"
+        //     }
+        // ]
+
         const result = {
             'info': response,
         };
@@ -297,8 +347,8 @@ module.exports = class latoken extends Exchange {
             const balance = response[i];
             const currencyId = this.safeString (balance, 'symbol');
             const code = this.safeCurrencyCode (currencyId);
-            const frozen = this.safeFloat (balance, 'frozen');
-            const pending = this.safeFloat (balance, 'pending');
+            const frozen = this.safeFloat (balance, 'frozen'); //maybe blocked
+            const pending = this.safeFloat (balance, 'pending'); //maybe set to 0
             const used = this.sum (frozen, pending);
             const account = {
                 'free': this.safeFloat (balance, 'available'),
